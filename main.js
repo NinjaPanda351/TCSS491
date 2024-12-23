@@ -10,7 +10,8 @@ const SHOW_WIREFRAMES = false;
  * World Attributes
  */
 const GRAVITY = 30;
-const STEPS_PER_FRAME = 5;
+const JUMP_STRENGTH = 10;
+const clock = new THREE.Clock();
 
 /**
  * Scene objects
@@ -21,7 +22,7 @@ let raycaster;
 
 let player = {
     height: 1.8,
-    speed: 0.1,
+    speed: 0.3,
     turnSpeed: Math.PI * 0.01,
     velocity: new THREE.Vector3(0, 0, 0),
     isOnGround: true
@@ -140,19 +141,13 @@ function init() {
 function animate() {
     requestAnimationFrame(animate);
 
+    const deltaTime = clock.getDelta();
+
     if (controls.isLocked) {
-        if (!player.isOnGround) {
-            player.velocity.y -= GRAVITY * 0.01;
-        }
+        mesh.rotation.x += 0.01;
+        mesh.rotation.y += 0.01;
 
-        const deltaY = player.velocity.y * 0.01;
-        camera.position.y += deltaY;
-
-        if (camera.position.y < player.height) {
-            camera.position.y = player.height;
-            player.velocity.y = 0;
-            player.isOnGround = true;
-        }
+        updatePlayer(deltaTime);
 
         handleMovement();
     }
@@ -160,16 +155,44 @@ function animate() {
     renderer.render(scene, camera);
 }
 
-function handleMovement() {
+function updatePlayer(deltaTime) {
+    if (!player.isOnGround) {
+        player.velocity.y -= GRAVITY * deltaTime;
+    }
+
+    camera.position.y += player.velocity.y * deltaTime;
+
+    if (camera.position.y < player.height) {
+        camera.position.y = player.height;
+        player.velocity.y = 0;
+        player.isOnGround = true;
+    }
+
+    handleMovement(deltaTime);
+}
+
+function handleMovement(deltaTime) {
     const velocity = new THREE.Vector3();
 
-    if (moveForward) velocity.z += player.speed;
-    if (moveBackward) velocity.z -= player.speed;
-    if (moveLeft) velocity.x -= player.speed;
-    if (moveRight) velocity.x += player.speed;
+    const diagonalSpeedFactor = 1.2; //Speed normalizer
+
+    let forwardSpeed = computeSpeed(moveForward, moveBackward);
+    let horizontalSpeed = computeSpeed(moveRight, moveLeft);
+
+    if (horizontalSpeed !== 0 && forwardSpeed !== 0) {
+        horizontalSpeed = horizontalSpeed / Math.sqrt(2) * diagonalSpeedFactor;
+        forwardSpeed = forwardSpeed / Math.sqrt(2) * diagonalSpeedFactor;
+    }
+
+    velocity.z += forwardSpeed * player.speed;
+    velocity.x += horizontalSpeed * player.speed;
 
     controls.moveRight(velocity.x);
     controls.moveForward(velocity.z);
+}
+
+function computeSpeed(isPositivePressed, isNegativePressed) {
+    return isNegativePressed ? -player.speed : isPositivePressed ? player.speed : 0;
 }
 
 // INITIATE
