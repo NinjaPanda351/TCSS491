@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
 /**
  * DEBUGGING
@@ -14,100 +15,137 @@ const STEPS_PER_FRAME = 5;
 /**
  * Scene objects
  */
-let scene, camera, renderer, mesh;
-let meshFloor;
+let scene, camera, renderer, controls;
+let mesh, meshFloor;
+let raycaster;
 
-
-let keyboard = {};
-let player = { height:1.8, speed:0.2, turnSpeed:Math.PI*0.01}
+let player = { height: 1.8, speed: 0.1, turnSpeed: Math.PI * 0.01 };
+let moveForward = false;
+let moveBackward = false;
+let moveLeft = false;
+let moveRight = false;
 
 function init() {
     scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 1000);
+    scene.background = new THREE.Color(0xffffff);
+    scene.fog = new THREE.Fog(0xffffff, 0.5, 300);
+
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.y = player.height;
+
+    const light = new THREE.HemisphereLight(0xeeeeff, 0x777788, 0.75);
+    light.position.set(0.5, 1, 0.75);
+    scene.add(light);
+
+    controls = new PointerLockControls(camera, document.body);
+
+    const blocker = document.getElementById('blocker');
+    const instructions = document.getElementById('instructions');
+
+    instructions.addEventListener('click', () => {
+        controls.lock();
+    });
+
+    controls.addEventListener('lock', () => {
+        instructions.style.display = 'none';
+        blocker.style.display = 'none';
+    });
+
+    controls.addEventListener('unlock', () => {
+        blocker.style.display = 'block';
+        instructions.style.display = '';
+    });
+
+    scene.add(controls.getObject());
+
+    const onKeyDown = (event) => {
+        switch (event.code) {
+            case 'KeyW':
+                moveForward = true;
+                break;
+            case 'KeyS':
+                moveBackward = true;
+                break;
+            case 'KeyA':
+                moveLeft = true;
+                break;
+            case 'KeyD':
+                moveRight = true;
+                break;
+        }
+    };
+
+    const onKeyUp = (event) => {
+        switch (event.code) {
+            case 'KeyW':
+                moveForward = false;
+                break;
+            case 'KeyS':
+                moveBackward = false;
+                break;
+            case 'KeyA':
+                moveLeft = false;
+                break;
+            case 'KeyD':
+                moveRight = false;
+                break;
+        }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
+
+    raycaster = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0), 0, 10);
 
     mesh = new THREE.Mesh(
         new THREE.BoxGeometry(1, 1, 1),
-        new THREE.MeshBasicMaterial({color: 0xff9999, wireframe: SHOW_WIREFRAMES})
+        new THREE.MeshBasicMaterial({ color: 0xff9999, wireframe: SHOW_WIREFRAMES })
     );
     mesh.position.y += 1;
     scene.add(mesh);
 
     meshFloor = new THREE.Mesh(
-        new THREE.PlaneGeometry(10, 10, 2, 2),
-        new THREE.MeshBasicMaterial({color: 0xffffff, wireframe: SHOW_WIREFRAMES})
-    )
+        new THREE.PlaneGeometry(20, 20, 2, 2),
+        new THREE.MeshBasicMaterial({ color: 0x999999, wireframe: SHOW_WIREFRAMES })
+    );
     meshFloor.rotation.x -= Math.PI / 2;
     scene.add(meshFloor);
 
-    camera.position.set(0, player.height, -5);
-    camera.lookAt(new THREE.Vector3(0, player.height, 0));
-
     renderer = new THREE.WebGLRenderer();
+    renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    animate()
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
 }
 
 function animate() {
     requestAnimationFrame(animate);
 
-    const deltaTime = Math.min(0.05, clock.getDelta()) / STEPS_PER_FRAME;
-    mesh.rotation.x += 0.01;
-    mesh.rotation.y += 0.02;
-
-    handleMovement();
+    if (controls.isLocked) {
+        handleMovement();
+    }
 
     renderer.render(scene, camera);
 }
 
 function handleMovement() {
-    if (keyboard[87]) { // W key
-        camera.position.x -= Math.sin(camera.rotation.y) * player.speed;
-        camera.position.z += Math.cos(camera.rotation.y) * player.speed;
-    }
-    if (keyboard[65]) { // A key
-        camera.position.x -= Math.sin(camera.rotation.y - Math.PI / 2) * player.speed;
-        camera.position.z += Math.cos(camera.rotation.y - Math.PI / 2) * player.speed;
-    }
-    if (keyboard[83]) { // S key
-        camera.position.x += Math.sin(camera.rotation.y) * player.speed;
-        camera.position.z -= Math.cos(camera.rotation.y) * player.speed;
-    }
-    if (keyboard[68]) { // D key
-        camera.position.x += Math.sin(camera.rotation.y - Math.PI / 2) * player.speed;
-        camera.position.z -= Math.cos(camera.rotation.y - Math.PI / 2) * player.speed;
-    }
-    if (keyboard[37]) { // left arrow key
-        camera.rotation.y -= player.turnSpeed;
-    }
-    if (keyboard[39]) { // right arrow key
-        camera.rotation.y += player.turnSpeed;
-    }
+    const velocity = new THREE.Vector3();
+
+    if (moveForward) velocity.z += player.speed;
+    if (moveBackward) velocity.z -= player.speed;
+    if (moveLeft) velocity.x -= player.speed;
+    if (moveRight) velocity.x += player.speed;
+
+    controls.moveRight(velocity.x);
+    controls.moveForward(velocity.z);
 }
-
-/**
- * Key Press Functions
- */
-function keyDown(event) {
-    keyboard[event.keyCode] = true;
-}
-
-function keyUp(event) {
-    keyboard[event.keyCode] = false;
-}
-
-/**
- * Event Listeners
- */
-window.addEventListener('resize', ()=> {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-})
-
-window.addEventListener('keydown', keyDown);
-window.addEventListener('keyup', keyUp);
 
 // INITIATE
 window.onload = init;
