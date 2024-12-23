@@ -19,7 +19,13 @@ let scene, camera, renderer, controls;
 let mesh, meshFloor;
 let raycaster;
 
-let player = { height: 1.8, speed: 0.1, turnSpeed: Math.PI * 0.01 };
+let player = {
+    height: 1.8,
+    speed: 0.1,
+    turnSpeed: Math.PI * 0.01,
+    velocity: new THREE.Vector3(0, 0, 0),
+    isOnGround: true
+};
 let moveForward = false;
 let moveBackward = false;
 let moveLeft = false;
@@ -71,6 +77,12 @@ function init() {
                 break;
             case 'KeyD':
                 moveRight = true;
+                break;
+            case 'Space':
+                if (player.isOnGround) {
+                    player.velocity.y = 10;
+                    player.isOnGround = false;
+                }
                 break;
         }
     };
@@ -129,6 +141,19 @@ function animate() {
     requestAnimationFrame(animate);
 
     if (controls.isLocked) {
+        if (!player.isOnGround) {
+            player.velocity.y -= GRAVITY * 0.01;
+        }
+
+        const deltaY = player.velocity.y * 0.01;
+        camera.position.y += deltaY;
+
+        if (camera.position.y < player.height) {
+            camera.position.y = player.height;
+            player.velocity.y = 0;
+            player.isOnGround = true;
+        }
+
         handleMovement();
     }
 
